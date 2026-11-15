@@ -1540,14 +1540,16 @@
     "element": "dark",
     "rarity": "legendary",
     "dialogue": {
-      "option": null,
+      "option": 3,
       "answer": {
-        "zh": null,
+        "zh": "我總是感到恐懼",
         "ja": null
       }
     },
     "bond": null,
-    "contributors": [],
+    "contributors": [
+      "win-x3413"
+    ],
     "verified": true
   },
   {
