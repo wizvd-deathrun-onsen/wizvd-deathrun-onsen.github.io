@@ -25,6 +25,8 @@ npm test        # node:test 單元測試（Node 22+）
 | `data/characters.json` | 角色資料 |
 | `data/i18n.json` | UI 字串、性格／屬性／緣份／稀有度名稱 |
 | `assets/avatars/` | 頭像 |
+| `scripts/bump-version.js` | 更新快取版本號（`npm run bump`） |
+| `scripts/apply-report.js` | 把已確認的回報 Issue 套用到 `characters.json`（由 workflow 呼叫） |
 | `tests/*.test.js` | 單元測試 |
 
 ## 資料格式（`data/characters.json`）
@@ -82,18 +84,43 @@ npm test       # 會檢查版本號是否一致、import map 是否涵蓋 js/ �
 | Label | 意思 | 誰來設定 |
 | --- | --- | --- |
 | `待審核` | 新回報，還沒看過 | Issue 範本自動加上 |
-| `已確認` | 維護者看過，可以更新到網站 | 維護者在 Issue 留言「ok」（或「確認」「沒問題」）會自動換上；也可手動設定 |
+| `已確認` | 維護者看過，可以更新到網站；換上後會自動套用（見下方） | 維護者在 Issue 留言「ok」（或「確認」「沒問題」）會自動換上；也可手動設定 |
 | `資料不完整` | 缺少性格、屬性或正確選項，等回報者補充 | `validate-report.yml` 自動加上並留言；補齊後自動移除 |
 | `資料有誤` | 內容有問題，不採用 | 維護者手動加上並關閉 Issue |
 
-更新資料時只處理標了 `已確認` 的 Issue：
+### 自動套用
+
+Issue 換上 `已確認` 後（留言「ok」或手動加 label），`approve-report.yml` 的 `apply` job 會執行 `scripts/apply-report.js`：
+
+1. 用回報的日文名／中文名找到 `characters.json` 的角色，核對性格、屬性
+2. 更新 `dialogue.option`、`dialogue.answer`（含假名的文字放 `answer.ja`，其餘放 `answer.zh`）；緣份只在原本是 `null` 時填入；備註欄有「回報者：暱稱」時加進 `contributors`
+3. `npm test` 通過後以 `github-actions[bot]` commit（訊息附 `Closes #<編號>`）並 push 到 `main`，要求 Pages 重新部署，在 Issue 留言列出變更並關閉
+
+以下情況不會改資料，只在 Issue 留言說明原因，並保留 `已確認` 等維護者手動處理（或請 Claude「更新資料回報」）：
+
+- 找不到角色（新角色要先補基本資料），或中日文名對到不同角色
+- 性格、屬性與資料不一致；緣份與既有資料不同
+- 正確選項是「不確定」且沒有選項文字
+- 選項文字超過 100 字或有換行
+
+注意事項：
+
+- 既有的選項編號或文字和回報不同時會被**覆寫**（留言會列出「舊 → 新」），確認前請先看清楚是不是修正
+- 只有漢字的日文選項文字會被當成中文，需要時手動搬到 `answer.ja`
+- 截圖與備註的其他內容不會被讀取
+- 想重跑：把 `已確認` label 移除再加回去
+- workflow 失敗（測試沒過、push 失敗）時 GitHub 會寄信通知，Issue 也會有留言
+
+### 手動處理
+
+自動套用不了的回報，只處理標了 `已確認` 的 Issue：
 
 1. 讀取回報內容，核對日文名、性格、屬性與 `characters.json` 是否一致（有截圖優先採信）
 2. 更新 `data/characters.json`，把回報者暱稱加進 `contributors` 陣列（備註欄的「回報者」）
 3. 執行 `npm test` 確認資料格式正確
 4. commit 訊息附上 `Closes #<issue 編號>`，push 後 Issue 會自動關閉
 
-Label 由 `.github/workflows/labels.yml` 建立；留言確認由 `.github/workflows/approve-report.yml` 處理，只接受有 repo 寫入權限的人。
+Label 由 `.github/workflows/labels.yml` 建立；留言確認與自動套用由 `.github/workflows/approve-report.yml` 處理，只接受有 repo 寫入權限的人。
 
 ### 新回報的 Email 通知
 

@@ -6,6 +6,8 @@
 
 只處理標了 `已確認` label、且沒有 `資料不完整` 的 open Issue；`待審核` 的還沒經過人工確認，不要套用。維護者在 Issue 留言「ok」時，workflow 會自動換上 `已確認`。
 
+大部分回報不需要 agent 處理：維護者留言「ok」後，`approve-report.yml` 會執行 `scripts/apply-report.js` 自動更新資料、commit、關閉 Issue。還開著且標了 `已確認` 的 Issue，是 script 判斷不能自動套用的（Issue 裡有留言說明原因，例如找不到角色、性格或屬性不一致、緣份衝突），依下面的步驟手動處理。套用規則有變時，同步修改 `scripts/apply-report.js` 與它的測試。
+
 列出可套用的回報（公開 repo，不需要 token）：
 
 ```sh

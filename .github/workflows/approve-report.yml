@@ -1,10 +1,16 @@
-# 維護者在回報 Issue 留言「ok」（或「確認」）時，自動把 label 從「待審核」換成「已確認」。
+# 維護者在回報 Issue 留言「ok」（或「確認」）時，自動把 label 從「待審核」換成「已確認」，
+# 接著把回報套用到 data/characters.json 並 push（scripts/apply-report.js）。
 # 只接受有寫入權限的人（OWNER / MEMBER / COLLABORATOR）的留言，其他人留言不會觸發。
+#
+# 手動加上「已確認」label 也會觸發套用；想重跑時把 label 移除再加回去即可。
+# 留言那條路徑的 label 是用 GITHUB_TOKEN 加的，GitHub 不會讓它再觸發 workflow，所以不會重複執行。
 name: Approve report by comment
 
 on:
   issue_comment:
     types: [created]
+  issues:
+    types: [labeled]
 
 permissions:
   issues: write
@@ -12,12 +18,16 @@ permissions:
 jobs:
   approve:
     if: >-
+      github.event_name == 'issue_comment' &&
       !github.event.issue.pull_request &&
       contains(github.event.issue.labels.*.name, 'data-report') &&
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
+    outputs:
+      confirmed: ${{ steps.mark.outputs.confirmed }}
     steps:
       - name: Mark as confirmed
+        id: mark
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -29,8 +39,91 @@ jobs:
           case "$text" in
             ok|okay|確認|沒問題)
               gh issue edit "$NUMBER" --add-label "已確認" --remove-label "待審核"
+              echo "confirmed=true" >> "$GITHUB_OUTPUT"
               ;;
             *)
               echo "留言不是確認指令，略過"
               ;;
+          esac
+
+  # 把剛確認的回報寫進 data/characters.json。不能確定的情況（找不到角色、性格／屬性不一致等）
+  # 不改資料，只在 Issue 留言說明，保留「已確認」讓維護者手動處理。
+  apply:
+    needs: approve
+    # approve 在手動加 label 時會被略過，所以用 always() 讓這個 job 仍然評估條件。
+    if: >-
+      always() &&
+      !github.event.issue.pull_request &&
+      github.event.issue.state == 'open' &&
+      contains(github.event.issue.labels.*.name, 'data-report') &&
+      !contains(github.event.issue.labels.*.name, '資料不完整') &&
+      !contains(github.event.issue.labels.*.name, '資料有誤') &&
+      (needs.approve.outputs.confirmed == 'true' ||
+       (github.event_name == 'issues' && github.event.label.name == '已確認'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pages: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      NUMBER: ${{ github.event.issue.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply report and push
+        id: apply
+        env:
+          # Issue 內文是回報者輸入的文字，只透過環境變數交給 script，不直接放進指令。
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          result="$RUNNER_TEMP/result"
+          export COMMENT_FILE="$RUNNER_TEMP/comment.md"
+          status=push_failed
+          # 同時確認多筆回報時 push 可能被搶先；每次都從最新的 main 重新套用，最多試 5 次。
+          for attempt in 1 2 3 4 5; do
+            git fetch --quiet origin main
+            git reset --quiet --hard origin/main
+            rm -f "$result"
+            GITHUB_OUTPUT="$result" node scripts/apply-report.js
+            status=$(sed -n 's/^status=//p' "$result")
+            name=$(sed -n 's/^name=//p' "$result")
+            [ "$status" = "applied" ] || break
+            if ! npm test; then
+              status=test_failed
+              echo "套用後 \`npm test\` 沒有通過，資料沒有更新。請維護者查看 workflow 紀錄。" > "$COMMENT_FILE"
+              break
+            fi
+            git commit --quiet -am "Data: apply report for ${name} (#${NUMBER})" -m "Closes #${NUMBER}"
+            if git push --quiet origin HEAD:main; then
+              break
+            fi
+            status=push_failed
+            echo "資料已產生但 push 失敗，沒有更新到網站。請維護者查看 workflow 紀錄。" > "$COMMENT_FILE"
+            sleep $((attempt * 3))
+          done
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      # 用 GITHUB_TOKEN push 的 commit 不會觸發 Pages 的 branch 部署，要另外要求 build。
+      - name: Request Pages build
+        if: steps.apply.outputs.status == 'applied'
+        run: gh api --method POST "repos/$GH_REPO/pages/builds" --silent
+
+      - name: Comment on issue
+        if: always() && steps.apply.outputs.status != ''
+        env:
+          STATUS: ${{ steps.apply.outputs.status }}
+        run: |
+          gh issue comment "$NUMBER" --body-file "$RUNNER_TEMP/comment.md"
+          case "$STATUS" in
+            applied|unchanged) gh issue close "$NUMBER" || true ;;
+            test_failed|push_failed) exit 1 ;;
           esac
