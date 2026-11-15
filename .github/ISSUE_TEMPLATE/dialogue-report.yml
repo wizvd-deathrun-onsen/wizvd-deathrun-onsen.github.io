@@ -104,6 +104,6 @@ body:
     id: notes
     attributes:
       label: 備註
-      description: 例如資料來源、是修正哪一筆資料、希望署名的名稱
+      description: 例如資料來源、是修正哪一筆資料。希望署名請寫「回報者：你的暱稱」，沒寫會以你的 GitHub 帳號名稱列為補充者
     validations:
       required: false

@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseReport, isJapanese, findCharacter, applyReport, buildComment } from '../scripts/apply-report.js';
+import { parseReport, withReporter, isJapanese, findCharacter, applyReport, buildComment } from '../scripts/apply-report.js';
 
 /** 依 Issue Form 的輸出格式組出內文；沒給的欄位為 `_No response_`。 */
 function body(fields = {}) {
@@ -60,6 +60,21 @@ describe('parseReport', () => {
 
   test('空內文不會丟錯', () => {
     assert.equal(parseReport(null).nameZh, '');
+  });
+});
+
+describe('withReporter', () => {
+  test('備註有回報者時優先使用，沒有才用 GitHub 帳號', () => {
+    const named = parseReport(body({ ...irohaReport, 備註: '回報者：小明' }));
+    assert.equal(withReporter(named, 'win-x3413').contributor, '小明');
+    const anonymous = parseReport(body(irohaReport));
+    assert.equal(withReporter(anonymous, 'win-x3413').contributor, 'win-x3413');
+    assert.equal(anonymous.contributor, '');
+  });
+
+  test('沒有帳號時維持空白', () => {
+    assert.equal(withReporter(parseReport(body(irohaReport)), '').contributor, '');
+    assert.equal(withReporter(parseReport(body(irohaReport)), undefined).contributor, '');
   });
 });
 

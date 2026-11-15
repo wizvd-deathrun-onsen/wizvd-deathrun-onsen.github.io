@@ -7,6 +7,7 @@
  *
  * 用法：ISSUE_BODY=... node scripts/apply-report.js
  * 選用環境變數 COMMENT_FILE：把要留在 Issue 的說明寫到該路徑。
+ * 選用環境變數 ISSUE_AUTHOR：開 Issue 的 GitHub 帳號，備註沒寫回報者時用它當補充者。
  */
 import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -39,7 +40,7 @@ export function parseReport(body) {
     for (const [title, value] of sections) if (title.startsWith(prefix)) return value;
     return '';
   };
-  // 備註欄的「回報者：暱稱」是希望署名的名稱；沒寫就不加補充者。
+  // 備註欄的「回報者：暱稱」是希望署名的名稱；沒寫時由 withReporter 改用 GitHub 帳號。
   const reporter = field('備註').match(/回報者\s*[:：]\s*([^\n]+)/);
   return {
     nameZh: field('角色名稱（中文）'),
@@ -51,6 +52,16 @@ export function parseReport(body) {
     bond: field('緣份'),
     contributor: reporter ? reporter[1].trim() : '',
   };
+}
+
+/**
+ * 決定要列為補充者的名稱：備註有「回報者：暱稱」就用它，否則用開 Issue 的 GitHub 帳號名稱。
+ * @param {ReturnType<typeof parseReport>} report 解析後的回報
+ * @param {string} [author] 開 Issue 的 GitHub 帳號；空字串或沒給時不補
+ * @returns {ReturnType<typeof parseReport>} 補上 `contributor` 的新物件
+ */
+export function withReporter(report, author) {
+  return { ...report, contributor: report.contributor || (author ?? '').trim() };
 }
 
 /** 含平假名或片假名就當作日文；只有漢字的日文無法分辨，會被當成中文。 */
@@ -175,7 +186,8 @@ export function buildComment(result) {
 function main() {
   const file = new URL('../data/characters.json', import.meta.url);
   const characters = JSON.parse(readFileSync(file, 'utf8'));
-  const result = applyReport(characters, parseReport(process.env.ISSUE_BODY));
+  const report = withReporter(parseReport(process.env.ISSUE_BODY), process.env.ISSUE_AUTHOR);
+  const result = applyReport(characters, report);
   if (result.status === 'applied') {
     writeFileSync(file, `${JSON.stringify(result.characters, null, 2)}\n`);
   }
