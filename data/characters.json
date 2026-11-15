@@ -1562,9 +1562,9 @@
     "element": "fire",
     "rarity": "legendary",
     "dialogue": {
-      "option": null,
+      "option": 2,
       "answer": {
-        "zh": null,
+        "zh": "這樣就不會失去夥伴了",
         "ja": null
       }
     },
