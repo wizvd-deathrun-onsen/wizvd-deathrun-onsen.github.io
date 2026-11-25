@@ -1157,6 +1157,28 @@
     "verified": true
   },
   {
+    "id": "arianaute",
+    "no": 2069,
+    "name": {
+      "zh": "愛莉安諾特",
+      "ja": "アリアノート"
+    },
+    "avatar": "assets/avatars/arianaute.webp",
+    "alignment": "good",
+    "element": "light",
+    "rarity": "legendary",
+    "dialogue": {
+      "option": null,
+      "answer": {
+        "zh": null,
+        "ja": null
+      }
+    },
+    "bond": null,
+    "contributors": [],
+    "verified": true
+  },
+  {
     "id": "prishe",
     "no": 9006,
     "name": {
