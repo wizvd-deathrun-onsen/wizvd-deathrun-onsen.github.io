@@ -1168,14 +1168,16 @@
     "element": "light",
     "rarity": "legendary",
     "dialogue": {
-      "option": null,
+      "option": 3,
       "answer": {
-        "zh": null,
+        "zh": "意義將由今後決定",
         "ja": null
       }
     },
     "bond": null,
-    "contributors": [],
+    "contributors": [
+      "阿奇"
+    ],
     "verified": true
   },
   {
